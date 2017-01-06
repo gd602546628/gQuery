@@ -22,13 +22,88 @@
         constructor:gQuery,
         length:0,
         init:function(selector){
-              gQuery.merge(this,[5,7,11,3]);
+
+            if(!selector){
+                return this;
+            };
+
+            if(typeof selector === "string"){
+                 if(selector.charAt(0) === "<" && selector.charAt(selector.length-1) === ">" && selector.length >=3){
+                     gQuery.merge(this,gQuery.parseHTML(selector));
+                 }else{
+                        return this.find(selector);
+                 }
+            }else if(gQuery.isArray(selector)){
+                gQuery.merge(this,selector)
+            }else if(gQuery.isDOM(selector)){
+                this[0]=selector;
+                this.length=1;
+            }else if(gQuery.isFunction(selector)){
+                document.addEventListener( "DOMContentLoaded", selector, false );
+            }
+
+
             return this
         },
 
         each:function(callBacks){
             gQuery.each(this,callBacks);
-        }
+        },
+
+        pushStack:function(obj){
+            var newGq=gQuery();
+            gQuery.merge(newGq,obj);
+            newGq.preObj = this;
+            return newGq;
+        },
+
+        eq:function(i){
+            var len= i>=0 ? i : this.length+i
+            return this.pushStack([this[len]]);
+        },
+
+        end:function(){
+           return this.preObj || gQuery();
+        },
+
+        find:function(obj){
+            //TODO：这里没有使用jQuery的Sizzlee而是使用querySelectorAll实现元素选择器，对老式浏览器没做兼容。
+             var list=[];
+             var length=this.length;
+            if(length > 0){
+                this.each(function(i,item){
+                    gQuery.merge(list,item.querySelectorAll(obj))
+                });
+            }else{
+                gQuery.merge(list,document.querySelectorAll(obj))
+            };
+
+            return this.pushStack(list);
+        },
+
+        css:function(name,value){
+            var _this=this;
+            var re=new RegExp("-")
+            if(typeof name === "string"){
+                  //TODO 兼容带浏览器前缀
+                var result=name.replace(/-([\da-z])/gi,function(a,b){
+                    return b.toUpperCase();
+                });
+
+               this.each(function(i,item){
+                   item.style[result]=value;
+               })
+            }else if(gQuery.isPlainObject(name)){
+                gQuery.each(name,function(i,value){
+                    var result=i.replace(/-([\da-z])/gi,function(a,b){
+                        return b.toUpperCase();
+                    });
+                    _this.each(function(i,item){
+                        item.style[result]=value
+                    });
+                })
+            };
+        },
     }
     gQuery.fn.init.prototype=gQuery.fn;
     /*工具方法*/
@@ -44,13 +119,17 @@
         return gQuery.type(obj) === "function";
     };
 
+    gQuery.isDOM=function(obj){
+        return !!(obj && typeof window !== 'undefined' && (obj === window || obj.nodeType));
+    }
+
     gQuery.isArray=function(obj){
         return Array.isArray(obj);
     };
 
     gQuery.isArrayLike=function(obj){
          var length=obj.length;
-         if(gQuery.type(obj) == "object" && length ){
+         if(gQuery.type(obj) == "object" && gQuery.type(length) === "number" ){
              return true
          };
 
@@ -101,6 +180,7 @@
          gQuery.isArrayLike(obj) || gQuery.type(obj) == "array" ? type=true : type = false ;
 
         if(type){
+
             for(var i=0;i<obj.length;i++){
                 callBack(i,obj[i]);
             };
@@ -260,16 +340,37 @@
     };
 
     gQuery.Deferred=function(){
-         var deferred={};
-         var  CallBack=gQuery.CallBacks({memory:true,once:true});
-        deferred.resolve=function(){
-            CallBack.fire();
-        };
-        deferred.done=function(fn){
-            CallBack.add(fn)
-        };
+        var tuples=[
+            ["resolve","done",gQuery.CallBacks({memory:true,once:true}),"resolved"],
+            ["reject","fail",gQuery.CallBacks({memory:true,once:false}),"rejected"]
+        ]
+            ,state
+            ,deferred={}
+            ,promise={
+                //TODO:增加promise的方法
+                 promise:function(obj){
+                     return obj !=null ? gQuery.extend(obj,promise) : promise;
+                 }
+            };
 
+        gQuery.each(tuples,function(i,item){
+            var list=item[2]
+                ,stateString=item[3];
+
+            if(stateString){
+                list.add(function(){
+                    state=stateString;
+                })
+            }
+            promise[item[1]]=list.add;
+            deferred[item[0]]=function(){
+                deferred[item[0]+"With"](this === deferred ? promise:this,arguments);
+            };
+            deferred[item[0]+"With"]=list.fireWith;
+        });
+        promise.promise( deferred );
         return deferred;
+
     };
 
 
