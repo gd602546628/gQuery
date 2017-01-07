@@ -12,7 +12,8 @@
         gd_indexOf=gd_array.indexOf,
         gd_toString=gd_obj.toString,
         gd_hasOwn=gd_obj.hasOwnProperty,
-        gd_trim=gd_verson.trim;
+        gd_trim=gd_verson.trim,
+        dataFlag = "gQuery" +("1.0.0"+Math.random()).replace(/\D/,"");
 
     var gQuery=function(selector){
          return new gQuery.fn.init(selector);
@@ -40,6 +41,8 @@
                 this.length=1;
             }else if(gQuery.isFunction(selector)){
                 document.addEventListener( "DOMContentLoaded", selector, false );
+            }else if(gQuery.isArrayLike(selector)){
+                gQuery.merge(this,selector)
             }
 
 
@@ -78,35 +81,163 @@
                 gQuery.merge(list,document.querySelectorAll(obj))
             };
 
+            if(this.length == 0){
+                return gQuery.merge(this,list)
+            }
             return this.pushStack(list);
         },
 
         css:function(name,value){
             var _this=this;
-            var re=new RegExp("-")
             if(typeof name === "string"){
-                  //TODO 兼容带浏览器前缀
-                var result=name.replace(/-([\da-z])/gi,function(a,b){
-                    return b.toUpperCase();
-                });
-
+                var result=gQuery.camelCase(name);
                this.each(function(i,item){
                    item.style[result]=value;
                })
             }else if(gQuery.isPlainObject(name)){
                 gQuery.each(name,function(i,value){
-                    var result=i.replace(/-([\da-z])/gi,function(a,b){
-                        return b.toUpperCase();
-                    });
+                    var result=gQuery.camelCase(i);
                     _this.each(function(i,item){
                         item.style[result]=value
                     });
                 })
             };
+            return this
         },
+
+        attr:function(name,value){
+            var _this=this;
+            if(typeof name === "string"){
+                if(arguments.length == 1){
+                    return this[0].getAttribute(name);
+                }else{
+                    this.each(function(i,item){
+                        item.setAttribute(name,value)
+                    })
+                }
+            }else if(gQuery.isPlainObject(name)){
+                gQuery.each(name,function(attr,value){
+                    _this.each(function(i,item){
+                         item.setAttribute(attr,value)
+                    })
+                })
+            };
+            return this
+        },
+
+        removeAttr:function(obj){
+            if(typeof obj === "string"){
+                this.each(function(i,item){
+                    item.removeAttribute(obj)
+                })
+            }else if(gQuery.isArray(obj)){
+                this.each(function(i,item){
+                    gQuery.each(obj,function(j,attr){
+                        item.removeAttribute(attr);
+                    })
+                })
+            }
+            return this;
+        },
+
+        addClass:function(obj){
+            if(typeof obj === "string"){
+                 this.each(function(i,item){
+                     var copy=item.className
+                         ,result=copy+" "+obj;
+                     item.className=result;
+
+                 })
+            }else if(gQuery.isArray(obj)){
+                this.each(function(i,item){
+                    gQuery.each(obj,function(j,className){
+                        var copy=item.className
+                            ,result=copy+" "+className;
+                        item.className=result;
+                    })
+                })
+            }
+            return this;
+        },
+
+        removeClass:function(obj){
+            if(typeof obj === "string"){
+                this.each(function(i,item){
+                    var result=item.className.replace(obj,"");
+                    item.className=result;
+                })
+            }else if(gQuery.isArray(obj)){
+                this.each(function(i,item){
+                    gQuery.each(obj,function(j,className){
+                        var result=item.className.replace(className,"");
+                        item.className=result;
+                    })
+                })
+            }
+            return this;
+        },
+
+        append:function(obj){
+             this.each(function(i,item){
+                   if(gQuery.isDOM(obj)){
+                       var copy=obj.cloneNode(true);
+                       item.appendChild(copy);
+                   }else if(gQuery.isArrayLike(obj)){
+                       obj.each(function(i,beAppend){
+                           var copy=beAppend.cloneNode(true); //拷贝一份DOM，不进行拷贝的话DOM，添加的是DOM引用，导致只会添加到最后一个
+                           item.appendChild(copy);
+                       });
+                   }
+             });
+            return this
+        },
+
+        appendTo:function(obj){
+            var _this=this;
+            if(gQuery.isDOM(obj)){
+                 this.each(function(i,beAppend){
+                     var copy=beAppend.cloneNode(true);
+                     obj.appendChild(copy);
+                 })
+            }else if(gQuery.isArrayLike(obj)){
+                obj.each(function(i,item){
+                    _this.each(function(i,beAppend){
+                        var copy=beAppend.cloneNode(true);
+                        item.appendChild(copy);
+                    })
+                })
+            };
+            return this;
+        },
+
+        parent:function(){
+            return this.pushStack(gQuery(this[0].parentNode));
+        },
+
+        child:function(){
+            var list=[];
+            var list=gQuery.merge(list,this[0].childNodes);
+            gQuery.each(list,function(i,item){
+                if(item.nodeName == "#text" && /\s/.test(item.nodeValue)){ //有些浏览器会将换行也当做子节点，这里讲换行删除
+                     list.splice(i,1);
+                }
+            })
+            return this.pushStack(list);
+        },
+
+        data:function(name,value){
+            gQuery(this,name,value);
+        },
+
+
     }
     gQuery.fn.init.prototype=gQuery.fn;
     /*工具方法*/
+    gQuery.camelCase=function(string){
+          return string.replace(/^-ms-/,"ms-").replace(/-([\da-z])/gi,function(a,b){
+              return b.toUpperCase();
+          })
+    };
     gQuery.type=function(obj){
         if(obj === null){
             return String(obj)
@@ -129,7 +260,7 @@
 
     gQuery.isArrayLike=function(obj){
          var length=obj.length;
-         if(gQuery.type(obj) == "object" && gQuery.type(length) === "number" ){
+         if((gQuery.type(obj) == "object" || gQuery.type(obj) == "nodelist") && gQuery.type(length) === "number" ){
              return true
          };
 
@@ -161,6 +292,7 @@
         };
 
         first.length=i;
+        return first;
     };
 
     //将字符串解析为HTML数组
@@ -370,6 +502,38 @@
         });
         promise.promise( deferred );
         return deferred;
+
+    };
+
+    gQuery.data=function(obj,name,value){
+        var target = gQuery.isArrayLike(obj) ? obj[0] : obj ;
+         var getCache=function(target){
+             target[dataFlag] = target[dataFlag] || {};
+             return target[dataFlag];
+         }
+         var getData=function(cache,name){
+             return cache[name];
+         }
+         var setData=function(cache,name,value){
+                 cache[name]=value;
+         }
+
+
+        if(value === undefined){
+            if(typeof name === "string"){
+                var cache = getCache(target);
+                return getData(cache,name);
+            }else if(gQuery.isPlainObject(name)){
+                var cache = getCache(target);
+                gQuery.each(name,function(a,b){
+                    setData(cache,a,b);
+                });
+            }
+
+        }else{
+            var cache = getCache(target);
+            setData(cache,name,value)
+        }
 
     };
 
